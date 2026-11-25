@@ -1,0 +1,140 @@
+// CampusPrint — 7 Core Entities (Proposal Section 5)
+// Ready for PostgreSQL + Prisma integration in subsequent milestones.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  STAFF
+  ADMIN
+}
+
+enum OptionCategory {
+  PAPER
+  COLOR
+  SIDES
+  BINDING
+}
+
+enum PricingUnit {
+  PER_PAGE
+  FLAT
+}
+
+enum OrderStatus {
+  DRAFT
+  SUBMITTED
+  AWAITING_PAYMENT
+  PAID
+  PRINTING
+  READY
+  COLLECTED
+  REJECTED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  rollNumber    String?
+  role          Role           @default(STUDENT)
+  createdAt     DateTime       @default(now())
+  orders        PrintOrder[]
+  documents     Document[]
+  notifications Notification[]
+}
+
+model Document {
+  id         String       @id @default(cuid())
+  ownerId    String
+  owner      User         @relation(fields: [ownerId], references: [id])
+  fileName   String
+  mimeType   String       @default("application/pdf")
+  pageCount  Int
+  sizeBytes  Int
+  storageKey String
+  createdAt  DateTime     @default(now())
+  orders     PrintOrder[]
+}
+
+model PrintOption {
+  id          String         @id @default(cuid())
+  code        String         @unique
+  name        String
+  category    OptionCategory
+  pricingUnit PricingUnit
+  unitPrice   Float
+  available   Boolean        @default(true)
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  orders      OrderOption[]
+}
+
+model PrintOrder {
+  id              String        @id @default(cuid())
+  studentId       String
+  student         User          @relation(fields: [studentId], references: [id])
+  documentId      String
+  document        Document      @relation(fields: [documentId], references: [id])
+  copies          Int           @default(1)
+  notes           String?
+  status          OrderStatus   @default(DRAFT)
+  totalPrice      Float
+  collectionCode  String?
+  rejectionReason String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  options         OrderOption[]
+  payments        Payment[]
+}
+
+model OrderOption {
+  id            String      @id @default(cuid())
+  orderId       String
+  order         PrintOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  printOptionId String
+  printOption   PrintOption @relation(fields: [printOptionId], references: [id])
+  unitPrice     Float
+  pricingUnit   PricingUnit
+  lineTotal     Float
+
+  @@unique([orderId, printOptionId])
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  orderId        String
+  order          PrintOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider       String        @default("SSLCOMMERZ_SANDBOX")
+  transactionId  String        @unique
+  idempotencyKey String        @unique
+  amount         Float
+  status         PaymentStatus @default(VERIFIED)
+  verifiedAt     DateTime?
+  createdAt      DateTime      @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  orderId   String?
+  channel   String
+  message   String
+  sentAt    DateTime @default(now())
+}
